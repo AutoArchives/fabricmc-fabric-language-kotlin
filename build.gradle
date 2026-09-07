@@ -6,10 +6,10 @@ buildscript {
 }
 
 plugins {
-    id 'fabric-loom' version '1.9.1'
+    id 'net.fabricmc.fabric-loom' version '1.17.20'
     id 'maven-publish'
     id "com.diffplug.spotless" version "6.19.0"
-    id 'me.modmuss50.mod-publish-plugin' version '0.8.1'
+    id 'me.modmuss50.mod-publish-plugin' version '2.2.0'
 }
 
 apply plugin: "org.jetbrains.kotlin.jvm"
@@ -62,7 +62,7 @@ loom {
 configurations {
     includeAndExpose
 
-    modApi {
+    api {
         extendsFrom includeAndExpose
     }
     include {
@@ -78,8 +78,7 @@ configurations.all {
 
 dependencies {
     minecraft "com.mojang:minecraft:${project.minecraftVersion}"
-    mappings "net.fabricmc:yarn:${project.mappingsVersion}:v2"
-    modImplementation "net.fabricmc:fabric-loader:${project.loaderVersion}"
+    implementation "net.fabricmc:fabric-loader:${project.loaderVersion}"
 	testImplementation "net.fabricmc:fabric-loader-junit:${project.loaderVersion}"
 	testImplementation "org.jetbrains.kotlin:kotlin-test"
 
@@ -93,10 +92,11 @@ dependencies {
 }
 
 processResources {
-    inputs.property "version", project.version
+    def modVersion = project.version
+    inputs.property "version", modVersion
 
     filesMatching("fabric.mod.json") {
-        expand "version": project.version
+        expand "version": modVersion
     }
 }
 
@@ -123,25 +123,14 @@ spotless {
 }
 
 jar {
+    def archivesName = project.base.archivesName.get()
     from("LICENSE") {
-        rename { "${it}_${project.base.archivesName.get()}" }
+        rename { "${it}_${archivesName}" }
     }
 }
 
 test {
 	useJUnitPlatform()
-	afterEvaluate {
-		// See: https://github.com/FabricMC/fabric-loader/pull/585
-		def classPathGroups = loom.mods.stream()
-			.map { modSettings ->
-				net.fabricmc.loom.util.gradle.SourceSetHelper.getClasspath(modSettings, getProject()).stream()
-					.map(File.&getAbsolutePath)
-					.collect(java.util.stream.Collectors.joining(File.pathSeparator))
-			}
-			.collect(java.util.stream.Collectors.joining(File.pathSeparator+File.pathSeparator))
-
-		systemProperty("fabric.classPathGroups", classPathGroups)
-	}
 }
 
 task processMDTemplates(type: Copy) {
@@ -194,7 +183,7 @@ publishing {
 }
 
 publishMods {
-    file = remapJar.archiveFile
+    file = jar.archiveFile
     changelog = ENV.CHANGELOG ?: "No changelog provided"
     type = STABLE
     displayName = "Fabric Language Kotlin ${project.version}"
@@ -208,6 +197,8 @@ publishMods {
 			start = "1.14"
 			end = "latest"
 		}
+        client = true
+        server = true
     }
     modrinth {
         accessToken = providers.environmentVariable("MODRINTH_TOKEN")
@@ -216,6 +207,7 @@ publishMods {
 			start = "1.14"
 			end = "latest"
 		}
+        environment = CLIENT_OR_SERVER
     }
     github {
         accessToken = providers.environmentVariable("GITHUB_TOKEN")
@@ -227,7 +219,6 @@ publishMods {
 import groovy.json.JsonBuilder
 import groovy.json.JsonSlurper
 import groovy.xml.XmlSlurper
-import org.gradle.util.VersionNumber
 
 import java.nio.charset.StandardCharsets
 
@@ -266,14 +257,13 @@ task updateLibraryVersions {
             def metadata = slurper.parseText(xml)
             def versions = metadata.versioning.versions.version*.text()
 
-            def latest = versions[0]
-            def latestParsed = VersionNumber.parse(latest)
-            for (def version : versions) {
-                def parsed = VersionNumber.parse(version)
-                if (parsed.qualifier == null && parsed > latestParsed) {
-                    latestParsed = parsed
-                    latest = version
-                }
+            def latest = versions.findAll { it ==~ /\d+(\.\d+)*/ }.max { a, b ->
+                def left = a.tokenize('.').collect { it.toInteger() }
+                def right = b.tokenize('.').collect { it.toInteger() }
+                (0..<Math.max(left.size(), right.size())).findResult { i ->
+                    def comparison = (i < left.size() ? left[i] : 0) <=> (i < right.size() ? right[i] : 0)
+                    comparison != 0 ? comparison : null
+                } ?: 0
             }
 
             println("${lib} = ${latest}")
