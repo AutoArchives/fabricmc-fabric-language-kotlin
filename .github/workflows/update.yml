@@ -12,8 +12,8 @@ jobs:
         with:
           java-version: 25
           distribution: 'temurin'
-      - run: ./gradlew updateVersions
-      - run: ./gradlew processMDTemplates
+      - run: ./gradlew updateVersions --warning-mode=fail
+      - run: ./gradlew processMDTemplates --warning-mode=fail
       - uses: peter-evans/create-pull-request@v8
         with:
           branch: update-versions

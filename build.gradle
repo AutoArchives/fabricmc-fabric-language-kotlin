@@ -135,6 +135,15 @@ test {
 
 task processMDTemplates(type: Copy) {
     group = "documentation"
+    def template = [
+            MOD_VERSION   : "${project.modVersion}+kotlin.${kotlinVersion}",
+            LOADER_VERSION: project.loaderVersion
+    ]
+    libraries.forEach {
+        def key = it.split(":", 2)[1].replace("-", "_").toUpperCase(Locale.ROOT) + "_VERSION"
+        template.put(key, libVersions[it])
+    }
+
     doFirst {
         if (hasMissingLibVersion) {
             throw new GradleException("Contains missing library version, run updateLibraryVersions task first!")
@@ -145,14 +154,6 @@ task processMDTemplates(type: Copy) {
     include("**/*.template.md")
     filesMatching("**/*.template.md") {
         name = sourceName.replace("template.", "")
-        def template = [
-                MOD_VERSION   : "${project.modVersion}+kotlin.${kotlinVersion}",
-                LOADER_VERSION: project.loaderVersion
-        ]
-        libraries.forEach {
-            def key = it.split(":", 2)[1].replace("-", "_").toUpperCase(Locale.ROOT) + "_VERSION"
-            template.put(key, libVersions[it])
-        }
         expand(template)
     }
     destinationDir = rootDir
@@ -172,10 +173,10 @@ publishing {
     repositories {
         if (ENV.MAVEN_URL) {
             maven {
-                url ENV.MAVEN_URL
+                url = ENV.MAVEN_URL
                 credentials {
-                    username ENV.MAVEN_USERNAME
-                    password ENV.MAVEN_PASSWORD
+                    username = ENV.MAVEN_USERNAME
+                    password = ENV.MAVEN_PASSWORD
                 }
             }
         }
